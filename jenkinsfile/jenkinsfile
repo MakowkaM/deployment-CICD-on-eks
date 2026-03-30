@@ -78,8 +78,8 @@ pipeline {
                 GIT_REPO_NAME = "deployment-CICD-on-eks-deployment-files"
                 GIT_EMAIL = "michalmakowka420@gmail.com"
                 GIT_USER_NAME = "MakowkaM"
-                IMAGE_NAME = "hotstar"
-                REPO_URL = "038462771803.dkr.ecr.us-east-1.amazonaws.com/hotstar"
+                IMAGE_NAME = "bar"
+                REPO_URL = "038462771803.dkr.ecr.us-east-1.amazonaws.com/bar"
                 YAML_FILE = "deployment.yml"
             }
             steps {
