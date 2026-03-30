@@ -1,0 +1,106 @@
+pipeline {
+    agent any 
+
+    environment  {
+        SCANNER_HOME= tool 'sonar-scanner'                // replace your sonarqube scanner name
+        SONARQUBE_SERVER  = 'sonar-server'                // replace your Jenkins global SonarQube server name (Manage Jenkins > Configure System)
+        AWS_ACCOUNT_ID = '038462771803'                   // replace AWS account ID
+        AWS_ECR_REPO_NAME = 'bar'                      //replace ECR repository name
+        SONAR_TOKEN_CRED  = 'sonar'            // Jenkins secret text credential id
+        AWS_DEFAULT_REGION = 'us-east-1'                 // replace AWS region
+        REPOSITORY_URI = "038462771803.dkr.ecr.us-east-1.amazonaws.com"        // replace your repository URL
+
+    }
+
+    stages {
+        stage('Cleaning Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+        stage('Checkout from Git') {
+            steps {
+                git branch: 'main', url: 'https://github.com/MakowkaM/deployment-CICD-on-eks.git'
+            }
+        }
+        stage("List Files") {
+            steps {
+                sh 'ls -la'
+            }
+        }
+
+        stage('Sonarqube Analysis') {
+            steps {
+                dir('Swiggy') {
+                    withSonarQubeEnv(env.SONARQUBE_SERVER) {
+                        // change your prohect name my project name is swiggy
+                        sh ''' 
+                        ${SCANNER_HOME}/bin/sonar-scanner \
+                        -Dsonar.projectName=swiggy \
+                        -Dsonar.projectKey=swiggy 
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Quality Check') {
+            steps {
+                script {
+                    // This requires the "Quality Gates" webhook to be configured in SonarQube
+                    waitForQualityGate abortPipeline: false, credentialsId: env.SONAR_TOKEN_CRED 
+                }
+            }
+        }
+
+        stage("Docker Image Build") {
+            steps {
+                script {
+                    sh 'docker system prune -f'
+                    sh 'docker container prune -f'
+                    sh 'docker build -t hotstar .'
+                }
+            }
+        }
+        stage("ECR Image Pushing") {
+            steps {
+                script {
+                    sh '''
+                    aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${REPOSITORY_URI}
+                    docker tag ${AWS_ECR_REPO_NAME}:latest ${REPOSITORY_URI}/${AWS_ECR_REPO_NAME}:${BUILD_NUMBER}
+                    docker push ${REPOSITORY_URI}/${AWS_ECR_REPO_NAME}:${BUILD_NUMBER}
+                    '''
+                }
+            }
+        }
+        stage('Update Deployment file') {
+            environment {
+                GIT_REPO_NAME = "deployment-CICD-on-eks-deployment-files"
+                GIT_EMAIL = "michalmakowka420@gmail.com"
+                GIT_USER_NAME = "MakowkaM"
+                IMAGE_NAME = "hotstar"
+                REPO_URL = "038462771803.dkr.ecr.us-east-1.amazonaws.com/hotstar"
+                YAML_FILE = "deployment.yml"
+            }
+            steps {
+                dir('kubernetes-files') {
+                    withCredentials([string(credentialsId: 'deploy-eks-token', variable: 'git_token')]) {
+                        sh '''
+                            git config user.email "${GIT_EMAIL}"
+                            git config user.name "${GIT_USER_NAME}"
+                            BUILD_NUMBER=${BUILD_NUMBER}
+                            echo $BUILD_NUMBER
+
+                            # push this image to your git hub
+                            sed -i "s#image:.*#image: ${REPO_URL}:$BUILD_NUMBER#g" ${YAML_FILE}
+                            git add .
+                            git commit -m "Update ${IMAGE_NAME} Image to version \${BUILD_NUMBER}"
+                            git push https://${git_token}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
+        
+                        '''
+                    }
+                }
+            }
+        }
+    }
+}
