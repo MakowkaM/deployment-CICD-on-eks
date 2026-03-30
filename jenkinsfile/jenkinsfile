@@ -73,6 +73,17 @@ pipeline {
                 }
             }
         }
+
+        stage('Clone Deployment Repo') {
+            steps {
+                dir('kubernetes-files') {
+                    git branch: 'main',
+                    url: 'https://github.com/MakowkaM/deployment-CICD-on-eks-deployment-files.git',
+                    credentialsId: 'github'
+        }
+    }
+}
+
         stage('Update Deployment file') {
             environment {
                 GIT_REPO_NAME = "deployment-CICD-on-eks-deployment-files"
@@ -92,7 +103,7 @@ pipeline {
                             echo $BUILD_NUMBER
 
                             # push this image to your git hub
-                            sed -i "s#image:.*#image: ${REPO_URL}:$BUILD_NUMBER#g" ${YAML_FILE}
+                            sed -i "s#${REPO_URL}:.*#${REPO_URL}:$BUILD_NUMBER#g" ${YAML_FILE}
                             git add .
                             git commit -m "Update ${IMAGE_NAME} Image to version \${BUILD_NUMBER}"
                             git push https://${git_token}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
