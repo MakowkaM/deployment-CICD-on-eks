@@ -58,7 +58,7 @@ pipeline {
                 script {
                     sh 'docker system prune -f'
                     sh 'docker container prune -f'
-                    sh 'docker build -t hotstar .'
+                    sh 'docker build -t bar .'
                 }
             }
         }
